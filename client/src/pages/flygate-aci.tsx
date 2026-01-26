@@ -599,12 +599,184 @@ function RightPaneContent({ activeId }: { activeId: TileId }) {
   );
 }
 
+function LandingScreen({ onEnter }: { onEnter: () => void }) {
+  const { session } = useIdentity();
+  const authed = session.state === "AUTHENTICATED";
+
+  return (
+    <div className="min-h-screen w-full flygate-surface">
+      <div className="pointer-events-none absolute inset-0 flygate-grid" />
+
+      <div className="relative mx-auto flex min-h-screen w-full max-w-[1200px] flex-col p-6">
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <FlygateMark size={44} />
+            <div className="leading-tight">
+              <div
+                className="text-sm font-semibold tracking-[0.10em] text-white"
+                style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                data-testid="text-title"
+              >
+                Flygate
+              </div>
+              <div className="text-xs text-white/55" data-testid="text-context">
+                Aviation Control Interface
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <ModeSwipeToggle />
+            <div
+              className={
+                "rounded-full border px-3 py-1 text-xs " +
+                (authed
+                  ? "border-[rgba(56,189,248,0.22)] bg-[rgba(56,189,248,0.08)] text-white/80"
+                  : "border-white/10 bg-white/5 text-white/55")
+              }
+              data-testid="status-session"
+            >
+              {authed ? "AUTHENTICATED" : session.state}
+            </div>
+          </div>
+        </header>
+
+        <div className="mt-5 grid gap-4">
+          <div
+            className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+            data-testid="panel-status"
+          >
+            <div className="flex items-center gap-2 text-white/70">
+              <div
+                className="text-xs font-medium"
+                style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                data-testid="text-status"
+              >
+                Cockpit Control Interface
+              </div>
+              <div className="text-xs text-white/45" data-testid="text-status-sub">
+                Embedded tablet · Display + input only
+              </div>
+            </div>
+            <div
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/55"
+              data-testid="status-ready"
+            >
+              Ready
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-2xl">
+            <div className="flygate-glass rounded-[32px] p-8">
+              <div className="mb-6 text-center">
+                <div
+                  className="text-2xl font-semibold text-white"
+                  style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                  data-testid="text-welcome"
+                >
+                  Flygate Cockpit Control
+                </div>
+                <div className="mt-2 text-sm text-white/60" data-testid="text-welcome-sub">
+                  Aviation-focused application control interface
+                </div>
+              </div>
+
+              <div className="mb-8 grid gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div
+                    className="mb-1 text-xs font-medium text-white/70"
+                    style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                    data-testid="text-feature-1"
+                  >
+                    8 Fixed Flight Operations Tiles
+                  </div>
+                  <div className="text-xs text-white/50" data-testid="text-feature-1-desc">
+                    Flight Maps · Flight Plan · Weather · Checklists · Performance · Comms · Maintenance · Security
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div
+                    className="mb-1 text-xs font-medium text-white/70"
+                    style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                    data-testid="text-feature-2"
+                  >
+                    Pinned Split-Screen Map View
+                  </div>
+                  <div className="text-xs text-white/50" data-testid="text-feature-2-desc">
+                    Flight Maps remain visible while selecting other tiles
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <div
+                    className="mb-1 text-xs font-medium text-white/70"
+                    style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                    data-testid="text-feature-3"
+                  >
+                    Cockpit-Safe Design
+                  </div>
+                  <div className="text-xs text-white/50" data-testid="text-feature-3-desc">
+                    No notifications · No mail apps · No customization
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center gap-4">
+                <button
+                  type="button"
+                  onClick={onEnter}
+                  disabled={!authed}
+                  className={
+                    "w-full rounded-2xl border px-6 py-4 text-sm font-semibold transition-all duration-200 " +
+                    (authed
+                      ? "border-[rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.12)] text-white hover:border-[rgba(56,189,248,0.45)] hover:bg-[rgba(56,189,248,0.18)] active:scale-[0.98]"
+                      : "cursor-not-allowed border-white/10 bg-white/5 text-white/35")
+                  }
+                  style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+                  data-testid="button-enter-flight-ops"
+                >
+                  {authed ? "Enter Flight Operations Mode" : "Sign in to enter Flight Operations Mode"}
+                </button>
+                {!authed && (
+                  <div className="text-center text-xs text-white/45" data-testid="text-auth-hint">
+                    Swipe the mode control to the right to authenticate
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <footer className="mt-auto pt-5">
+          <div
+            className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+            data-testid="footer"
+          >
+            <div className="text-xs text-white/45" data-testid="text-footer-left">
+              Embedded cockpit tablet · Display + input only
+            </div>
+            <div className="text-xs text-white/55" data-testid="text-footer-right">
+              Flygate ACI · Prototype
+            </div>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function FlyGateACIScreen() {
   const { session } = useIdentity();
   const authed = session.state === "AUTHENTICATED";
 
   const [activeId, setActiveId] = React.useState<TileId>("flight-maps");
+  const [inFlightOps, setInFlightOps] = React.useState(false);
   const mapPinned = true;
+
+  if (!inFlightOps) {
+    return <LandingScreen onEnter={() => setInFlightOps(true)} />;
+  }
 
   return (
     <div className="min-h-screen w-full flygate-surface">
