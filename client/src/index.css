@@ -47,7 +47,6 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
-  /* Automatically computed borders (already hsl wrapped). */
   --color-sidebar-primary-border: var(--sidebar-primary-border);
   --color-sidebar-accent-border: var(--sidebar-accent-border);
   --color-primary-border: var(--primary-border);
@@ -64,7 +63,6 @@
   --elevate-1: rgba(0, 0, 0, 0.03);
   --elevate-2: rgba(0, 0, 0, 0.08);
 
-  /* Default to dark aviation UI via .dark on html, but keep sane light fallbacks */
   --background: 220 18% 96%;
   --foreground: 222 20% 12%;
   --card: 0 0% 100%;
@@ -103,12 +101,13 @@
   --sidebar-accent-foreground: 222 20% 12%;
   --sidebar-ring: 212 92% 50%;
 
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
   --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --radius: 0.9rem;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 
+  --radius: 0.9rem;
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
@@ -132,53 +131,53 @@
   --button-outline: rgba(255, 255, 255, 0.1);
   --badge-outline: rgba(255, 255, 255, 0.05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255, 255, 255, 0.04);
-  --elevate-2: rgba(255, 255, 255, 0.09);
+  --elevate-1: rgba(255, 255, 255, 0.03);
+  --elevate-2: rgba(255, 255, 255, 0.06);
 
-  /* FlyGate – dark, aviation-focused */
-  --background: 220 22% 6%;
-  --foreground: 210 22% 92%;
+  /* Flygate cockpit dark mode */
+  --background: 220 16% 6%;
+  --foreground: 210 18% 92%;
 
-  --card: 220 22% 9%;
-  --card-foreground: 210 22% 92%;
-  --border: 220 18% 16%;
-  --card-border: 220 18% 16%;
+  --card: 220 14% 9%;
+  --card-foreground: 210 18% 92%;
+  --border: 220 12% 16%;
+  --card-border: 220 12% 16%;
 
-  --popover: 220 22% 9%;
-  --popover-foreground: 210 22% 92%;
-  --popover-border: 220 18% 16%;
+  --popover: 220 14% 9%;
+  --popover-foreground: 210 18% 92%;
+  --popover-border: 220 12% 16%;
 
   --primary: 202 92% 54%;
-  --primary-foreground: 220 22% 6%;
+  --primary-foreground: 220 16% 6%;
 
-  --secondary: 220 16% 12%;
-  --secondary-foreground: 210 22% 92%;
+  --secondary: 220 12% 12%;
+  --secondary-foreground: 210 18% 92%;
 
-  --muted: 220 16% 11%;
-  --muted-foreground: 215 14% 62%;
+  --muted: 220 12% 11%;
+  --muted-foreground: 215 12% 62%;
 
-  --accent: 46 98% 58%;
-  --accent-foreground: 220 22% 6%;
+  --accent: 46 90% 56%;
+  --accent-foreground: 220 16% 6%;
 
-  --destructive: 0 82% 56%;
+  --destructive: 0 78% 56%;
   --destructive-foreground: 0 0% 100%;
 
-  --input: 220 18% 20%;
+  --input: 220 12% 20%;
   --ring: 202 92% 54%;
 
   --chart-1: 202 92% 54%;
   --chart-2: 160 84% 40%;
-  --chart-3: 46 98% 58%;
+  --chart-3: 46 90% 56%;
   --chart-4: 280 80% 62%;
   --chart-5: 10 84% 60%;
 
-  --sidebar: 220 22% 7%;
-  --sidebar-foreground: 210 22% 92%;
-  --sidebar-border: 220 18% 16%;
+  --sidebar: 220 16% 7%;
+  --sidebar-foreground: 210 18% 92%;
+  --sidebar-border: 220 12% 16%;
   --sidebar-primary: 202 92% 54%;
-  --sidebar-primary-foreground: 220 22% 6%;
-  --sidebar-accent: 46 98% 58%;
-  --sidebar-accent-foreground: 220 22% 6%;
+  --sidebar-primary-foreground: 220 16% 6%;
+  --sidebar-accent: 46 90% 56%;
+  --sidebar-accent-foreground: 220 16% 6%;
   --sidebar-ring: 202 92% 54%;
 }
 
@@ -189,11 +188,17 @@
   html.dark {
     color-scheme: dark;
   }
+
   * {
     @apply border-border;
   }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 }
 
@@ -266,56 +271,56 @@
 
   .flygate-surface {
     background:
-      radial-gradient(1200px 900px at 18% 20%, rgba(56, 189, 248, 0.10), transparent 55%),
-      radial-gradient(900px 700px at 80% 30%, rgba(250, 204, 21, 0.08), transparent 60%),
-      radial-gradient(800px 600px at 55% 85%, rgba(99, 102, 241, 0.08), transparent 55%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
+      radial-gradient(900px 650px at 18% 18%, rgba(56, 189, 248, 0.06), transparent 58%),
+      radial-gradient(900px 650px at 85% 28%, rgba(250, 204, 21, 0.04), transparent 62%),
+      radial-gradient(900px 650px at 55% 88%, rgba(99, 102, 241, 0.04), transparent 62%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.00), rgba(0, 0, 0, 0.28) 55%, rgba(0, 0, 0, 0.48)),
       hsl(var(--background));
   }
 
   .flygate-glass {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+    border: 1px solid rgba(255, 255, 255, 0.06);
     box-shadow:
-      0 30px 80px rgba(0, 0, 0, 0.65),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 26px 70px rgba(0, 0, 0, 0.70),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .flygate-grid {
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+      linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
     background-size: 28px 28px;
     background-position: center;
     mask-image: radial-gradient(ellipse at 50% 40%, black 42%, transparent 74%);
-    opacity: 0.22;
+    opacity: 0.18;
   }
 
   .flygate-tile {
     background:
-      radial-gradient(140px 120px at 20% 15%, rgba(56, 189, 248, 0.16), transparent 65%),
-      radial-gradient(180px 140px at 100% 0%, rgba(250, 204, 21, 0.10), transparent 60%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-    border: 1px solid rgba(255, 255, 255, 0.10);
+      radial-gradient(160px 130px at 20% 15%, rgba(56, 189, 248, 0.10), transparent 70%),
+      radial-gradient(200px 150px at 100% 0%, rgba(250, 204, 21, 0.06), transparent 70%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.030), rgba(255, 255, 255, 0.010));
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow:
-      0 18px 50px rgba(0, 0, 0, 0.55),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+      0 18px 46px rgba(0, 0, 0, 0.62),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
   .flygate-tile:hover {
-    border-color: rgba(56, 189, 248, 0.35);
+    border-color: rgba(56, 189, 248, 0.24);
   }
 
   .flygate-tile[data-active="true"] {
-    border-color: rgba(56, 189, 248, 0.55);
+    border-color: rgba(56, 189, 248, 0.40);
     box-shadow:
-      0 18px 50px rgba(0, 0, 0, 0.55),
-      0 0 0 1px rgba(56, 189, 248, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
+      0 18px 46px rgba(0, 0, 0, 0.62),
+      0 0 0 1px rgba(56, 189, 248, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
   .flygate-mode-pill {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+    border: 1px solid rgba(255, 255, 255, 0.07);
   }
 }
