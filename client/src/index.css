@@ -199,6 +199,12 @@
 
   #root {
     min-height: 100vh;
+    overflow: hidden;
+  }
+
+  html,
+  body {
+    overflow: hidden;
   }
 }
 

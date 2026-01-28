@@ -1,0 +1,329 @@
+Got you. Here’s a Replit-friendly “blueprint repo” that spells out the code logic + API schema you need in FlyGate (agent) and ACI (console), in a way Replit can run today (with simulated docking), and later you can swap in real USB/Ethernet signals on Armbian.
+
+Below is a single Replit monorepo:
+
+aci-console/ = FastAPI backend (state machine + nonce + handshake + capabilities + intents)
+
+aci-gui/ = React UI (dark cockpit launcher, reads /status)
+
+flygate-agent-sim/ = agent simulator (signs nonce, posts handshake)
+
+0) Repo structure (copy this)
+.
+├─ aci-console/
+│  ├─ main.py
+│  ├─ state.py
+│  ├─ security.py
+│  ├─ schemas.py
+│  ├─ config.json
+│  └─ requirements.txt
+├─ flygate-agent-sim/
+│  ├─ agent_sim.py
+│  └─ requirements.txt
+└─ aci-gui/
+   ├─ package.json
+   ├─ vite.config.js
+   └─ src/
+      ├─ App.tsx
+      ├─ api.ts
+      └─ types.ts
+
+1) ACI Console (FastAPI) — logic + schemas
+aci-console/requirements.txt
+fastapi
+uvicorn
+cryptography
+pydantic
+
+aci-console/config.json
+{
+  "nonce_ttl_seconds": 30,
+  "trusted_devices": [
+    {
+      "device_id": "FlyGateAgent-iPad-0001",
+      "device_name": "Pilot iPad (FlyGate)",
+      "public_key_pem_path": "agent_public_key.pem"
+    }
+  ],
+  "flight_minimum_apps": [
+    "com.flight.ops",
+    "com.flight.nav",
+    "com.flight.checklists"
+  ],
+  "on_duty_apps": [
+    "com.ops.general",
+    "com.docs.viewer"
+  ]
+}
+
+aci-console/state.py
+from enum import Enum
+from dataclasses import dataclass, field
+from time import time
+from typing import Optional, List, Dict
+
+class DutyState(str, Enum):
+    OFF_DUTY = "OFF_DUTY"
+    ON_DUTY = "ON_DUTY"
+    FLIGHT_MODE = "FLIGHT_MODE"
+
+@dataclass
+class ACIState:
+    duty_state: DutyState = DutyState.ON_DUTY
+    trusted_device_attached: bool = False
+    trusted_device_id: Optional[str] = None
+    trusted_device_name: Optional[str] = None
+    last_transition_epoch: float = field(default_factory=time)
+    active_apps: List[str] = field(default_factory=list)
+    last_handshake_ok: bool = False
+    last_error: Optional[str] = None
+
+    def transition(self, new_state: DutyState, apps: List[str], *, device_id: Optional[str]=None, device_name: Optional[str]=None):
+        self.duty_state = new_state
+        self.active_apps = apps
+        self.trusted_device_id = device_id
+        self.trusted_device_name = device_name
+        self.last_transition_epoch = time()
+        self.last_error = None
+
+aci-console/security.py
+import base64, json, time
+from pathlib import Path
+from typing import Dict
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.exceptions import InvalidSignature
+
+def _b64d(s: str) -> bytes:
+    pad = "=" * ((4 - len(s) % 4) % 4)
+    return base64.urlsafe_b64decode((s + pad).encode())
+
+def load_public_key(pem_path: str) -> rsa.RSAPublicKey:
+    pem = Path(pem_path).read_bytes()
+    return serialization.load_pem_public_key(pem)
+
+def verify_signature(pub: rsa.RSAPublicKey, payload: Dict, signature_b64: str) -> bool:
+    msg = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    sig = _b64d(signature_b64)
+    try:
+        pub.verify(
+            sig, msg,
+            padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH),
+            hashes.SHA256(),
+        )
+        return True
+    except InvalidSignature:
+        return False
+
+def is_fresh(ts: int, ttl_seconds: int) -> bool:
+    now = int(time.time())
+    return abs(now - int(ts)) <= ttl_seconds
+
+aci-console/schemas.py
+from pydantic import BaseModel, Field
+from typing import Dict, List, Literal, Optional
+
+DutyState = Literal["OFF_DUTY", "ON_DUTY", "FLIGHT_MODE"]
+
+class StatusResponse(BaseModel):
+    duty_state: DutyState
+    trusted_device_attached: bool
+    trusted_device_id: Optional[str] = None
+    trusted_device_name: Optional[str] = None
+    active_apps: List[str]
+    last_transition_epoch: float
+    last_handshake_ok: bool
+    last_error: Optional[str] = None
+
+class NonceResponse(BaseModel):
+    nonce: str
+    ttl_seconds: int
+
+class HandshakeRequest(BaseModel):
+    payload: Dict = Field(..., description="Canonical JSON payload signed by FlyGate agent")
+    signature_b64: str = Field(..., description="URL-safe base64 signature over payload JSON")
+
+class HandshakeResponse(BaseModel):
+    status: Literal["OK"]
+    duty_state: DutyState
+    apps_unlocked: List[str]
+    device_id: str
+    device_name: str
+
+class Capability(BaseModel):
+    app_id: str
+    display_name: str
+    intent_ids: List[str]
+
+class CapabilitiesResponse(BaseModel):
+    duty_state: DutyState
+    apps: List[Capability]
+
+class IntentRequest(BaseModel):
+    intent_id: str
+    app_id: str
+    payload: Dict
+
+class IntentResponse(BaseModel):
+    status: Literal["OK"]
+    routed_to: str
+
+aci-console/main.py
+import json, secrets
+from pathlib import Path
+from typing import Dict, Optional
+
+from fastapi import FastAPI, HTTPException
+from state import ACIState, DutyState
+from schemas import (
+    StatusResponse, NonceResponse, HandshakeRequest, HandshakeResponse,
+    CapabilitiesResponse, Capability, IntentRequest, IntentResponse
+)
+from security import load_public_key, verify_signature, is_fresh
+
+app = FastAPI(title="ACI Console API")
+
+STATE = ACIState()
+NONCE: Optional[str] = None
+
+def cfg() -> Dict:
+    return json.loads(Path("config.json").read_text(encoding="utf-8"))
+
+def set_on_duty():
+    STATE.transition(DutyState.ON_DUTY, cfg()["on_duty_apps"])
+
+def set_flight_mode(device_id: str, device_name: str):
+    STATE.transition(DutyState.FLIGHT_MODE, cfg()["flight_minimum_apps"], device_id=device_id, device_name=device_name)
+
+def clear_nonce():
+    global NONCE
+    NONCE = None
+
+def issue_nonce():
+    global NONCE
+    NONCE = secrets.token_urlsafe(24)
+    return NONCE
+
+# ---------- Replit-friendly "dock simulation" ----------
+# In real life, this is where USB/Ethernet detection drives attached/detached.
+@app.post("/simulate/dock/attach/{device_id}")
+def simulate_attach(device_id: str):
+    trusted = next((d for d in cfg()["trusted_devices"] if d["device_id"] == device_id), None)
+    if not trusted:
+        raise HTTPException(404, "Unknown device_id")
+    STATE.trusted_device_attached = True
+    STATE.trusted_device_id = trusted["device_id"]
+    STATE.trusted_device_name = trusted["device_name"]
+    STATE.last_handshake_ok = False
+    issue_nonce()
+    set_on_duty()
+    return {"status": "OK", "message": "Trusted device attached. Nonce issued. Handshake required for Flight Mode."}
+
+@app.post("/simulate/dock/detach")
+def simulate_detach():
+    STATE.trusted_device_attached = False
+    STATE.trusted_device_id = None
+    STATE.trusted_device_name = None
+    STATE.last_handshake_ok = False
+    clear_nonce()
+    set_on_duty()
+    return {"status": "OK", "message": "Device detached. Back to ON_DUTY."}
+
+# ---------- Core endpoints ----------
+@app.get("/status", response_model=StatusResponse)
+def status():
+    return StatusResponse(
+        duty_state=STATE.duty_state,
+        trusted_device_attached=STATE.trusted_device_attached,
+        trusted_device_id=STATE.trusted_device_id,
+        trusted_device_name=STATE.trusted_device_name,
+        active_apps=STATE.active_apps,
+        last_transition_epoch=STATE.last_transition_epoch,
+        last_handshake_ok=STATE.last_handshake_ok,
+        last_error=STATE.last_error
+    )
+
+@app.get("/nonce", response_model=NonceResponse)
+def nonce():
+    c = cfg()
+    if not STATE.trusted_device_attached or not STATE.trusted_device_id:
+        raise HTTPException(403, "No trusted device attached.")
+    if not NONCE:
+        issue_nonce()
+    return NonceResponse(nonce=NONCE, ttl_seconds=int(c["nonce_ttl_seconds"]))
+
+@app.post("/handshake", response_model=HandshakeResponse)
+def handshake(req: HandshakeRequest):
+    c = cfg()
+    ttl = int(c["nonce_ttl_seconds"])
+
+    if not STATE.trusted_device_attached or not STATE.trusted_device_id:
+        raise HTTPException(403, "No trusted device attached.")
+    if not NONCE:
+        raise HTTPException(403, "Nonce not issued. Call /nonce first.")
+
+    payload = req.payload
+    if payload.get("nonce") != NONCE:
+        STATE.last_error = "Invalid nonce"
+        raise HTTPException(403, "Invalid nonce")
+
+    ts = payload.get("ts")
+    if not isinstance(ts, int) or not is_fresh(ts, ttl):
+        STATE.last_error = "Stale timestamp"
+        raise HTTPException(403, "Stale timestamp")
+
+    device_id = payload.get("device_id")
+    trusted = next((d for d in c["trusted_devices"] if d["device_id"] == device_id), None)
+    if not trusted:
+        STATE.last_error = "Untrusted device_id"
+        raise HTTPException(403, "Untrusted device_id")
+
+    pub = load_public_key(trusted["public_key_pem_path"])
+    if not verify_signature(pub, payload, req.signature_b64):
+        STATE.last_error = "Bad signature"
+        raise HTTPException(403, "Signature verification failed")
+
+    # ✅ Trust established → FLIGHT_MODE
+    set_flight_mode(device_id=trusted["device_id"], device_name=trusted["device_name"])
+    STATE.last_handshake_ok = True
+    clear_nonce()
+
+    return HandshakeResponse(
+        status="OK",
+        duty_state=STATE.duty_state,
+        apps_unlocked=STATE.active_apps,
+        device_id=trusted["device_id"],
+        device_name=trusted["device_name"]
+    )
+
+@app.get("/capabilities", response_model=CapabilitiesResponse)
+def capabilities():
+    # Minimal “projection contract”: what the console is allowed to show now.
+    if STATE.duty_state == DutyState.FLIGHT_MODE:
+        apps = [
+            Capability(app_id="com.flight.ops", display_name="Flight Ops", intent_ids=["open_checklist", "show_status"]),
+            Capability(app_id="com.flight.nav", display_name="Navigation", intent_ids=["route_summary", "wx_overlay"]),
+            Capability(app_id="com.flight.checklists", display_name="Checklists", intent_ids=["open_checklist"])
+        ]
+    else:
+        apps = [
+            Capability(app_id="com.ops.general", display_name="Ops", intent_ids=["open_doc"]),
+            Capability(app_id="com.docs.viewer", display_name="Docs", intent_ids=["open_doc"])
+        ]
+
+    return CapabilitiesResponse(duty_state=STATE.duty_state, apps=apps)
+
+@app.post("/intent", response_model=IntentResponse)
+def intent(req: IntentRequest):
+    # Guard: flight intents only allowed in FLIGHT_MODE
+    if req.app_id.startswith("com.flight.") and STATE.duty_state != DutyState.FLIGHT_MODE:
+        raise HTTPException(403, "Flight intents require FLIGHT_MODE")
+
+    # In real life: route this to FlyGate agent or local modules.
+    return IntentResponse(status="OK", routed_to=req.app_id)
+
+Run ACI Console in Replit
+
+From aci-console/:
+
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
