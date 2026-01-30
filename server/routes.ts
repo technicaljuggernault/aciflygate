@@ -21,6 +21,11 @@ export async function registerRoutes(
 
   app.get("/api/aci/nonce", (req, res) => {
     const deviceId = req.query.device_id as string | undefined;
+    
+    if (!deviceId) {
+      return res.status(400).json({ error: "Missing device_id query parameter" });
+    }
+    
     const result = aciState.issueNonce(deviceId);
     
     if ("error" in result) {
@@ -86,8 +91,15 @@ export async function registerRoutes(
     if (!device_id || !device_name) {
       return res.status(400).json({ error: "Missing device_id or device_name" });
     }
+    
+    if (!public_key_pem) {
+      return res.status(400).json({ error: "Missing public_key_pem - required for secure handshake" });
+    }
 
-    aciState.registerTrustedDevice(device_id, device_name, public_key_pem);
+    const success = aciState.registerTrustedDevice(device_id, device_name, public_key_pem);
+    if (!success) {
+      return res.status(400).json({ error: "Failed to register device" });
+    }
     res.json({ status: "OK", message: `Device ${device_name} registered.` });
   });
 

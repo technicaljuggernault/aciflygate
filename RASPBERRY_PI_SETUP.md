@@ -194,20 +194,34 @@ The FlyGate iPad agent should:
 
 1. Listen for USB connection to ACI console
 2. Request nonce: `GET /api/aci/nonce?device_id=FlyGateAgent-iPad-0001`
-3. Sign payload with RSA private key:
-   ```json
-   {
-     "nonce": "<received_nonce>",
-     "ts": <unix_timestamp>,
-     "device_id": "FlyGateAgent-iPad-0001"
-   }
+3. Create canonical payload JSON (keys sorted alphabetically, no whitespace):
    ```
-4. Post handshake: `POST /api/aci/handshake`
+   {"device_id":"FlyGateAgent-iPad-0001","nonce":"<received_nonce>","ts":<unix_timestamp>}
+   ```
+4. Sign the canonical JSON with RSA-SHA256 private key
+5. Encode signature as base64url (URL-safe base64, no padding)
+6. Post handshake: `POST /api/aci/handshake`
    ```json
    {
-     "payload": { "nonce": "...", "ts": ..., "device_id": "..." },
+     "payload": { "device_id": "...", "nonce": "...", "ts": ... },
      "signature_b64": "<base64url_signature>"
    }
    ```
+
+### Security Notes
+
+- **Nonce TTL**: Nonces expire after 30 seconds
+- **Device binding**: Nonce is bound to the device_id that requested it
+- **Signature required**: All trusted devices must have a registered public key
+- **Canonical JSON**: Payload must be serialized with sorted keys, no whitespace
+
+### Testing Without Signatures
+
+For development/testing, set environment variable:
+```bash
+SKIP_SIGNATURE_VERIFY=true
+```
+
+**Warning**: Never use this in production - it bypasses authentication!
 
 On successful handshake, ACI transitions to FLIGHT_MODE and unlocks flight apps.

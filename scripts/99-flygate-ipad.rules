@@ -9,9 +9,14 @@
 #   129e+ - iPad Pro
 #
 # This rule triggers on any Apple iOS device connection
+# Note: For production, the FlyGate agent identifies itself via the handshake,
+# not via USB attributes. The udev rule just triggers the connection flow.
 
-# iPad connected - trigger attach
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ENV{DEVTYPE}=="usb_device", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 attach"
+# iPad connected - trigger attach (any Apple iOS device)
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ENV{DEVTYPE}=="usb_device", TAG+="systemd", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 attach"
 
-# iPad disconnected - trigger detach  
-ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="05ac", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 detach"
+# iPad disconnected - use unbind event which is more reliable
+ACTION=="unbind", SUBSYSTEM=="usb", ENV{PRODUCT}=="5ac/*", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 detach"
+
+# Alternative remove trigger using ID_VENDOR
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR}=="Apple*", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 detach"
