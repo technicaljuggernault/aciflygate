@@ -1,0 +1,17 @@
+# FlyGate ACI - iPad USB Detection Rules
+# Install to: /etc/udev/rules.d/99-flygate-ipad.rules
+#
+# Apple iPad USB Vendor ID: 05ac
+# iPad Product IDs vary by model:
+#   12a8 - iPad (various)
+#   12ab - iPad mini
+#   12a4/12a5 - iPad Air
+#   129e+ - iPad Pro
+#
+# This rule triggers on any Apple iOS device connection
+
+# iPad connected - trigger attach
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", ENV{DEVTYPE}=="usb_device", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 attach"
+
+# iPad disconnected - trigger detach  
+ACTION=="remove", SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="05ac", RUN+="/opt/flygate-aci/scripts/usb-monitor.sh FlyGateAgent-iPad-0001 detach"

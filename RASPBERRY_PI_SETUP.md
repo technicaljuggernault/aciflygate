@@ -142,13 +142,72 @@ node --version  # Should be 20.x
 npm --version
 ```
 
-## Hardware Integration
+## USB Detection Setup
 
-For USB iPad docking detection, the FlyGate Agent on the iPad communicates with this ACI console via the API endpoints:
+Enable automatic iPad detection via USB:
 
-- `POST /api/aci/simulate/attach/:deviceId` - Dock iPad
-- `POST /api/aci/simulate/detach` - Undock iPad
+```bash
+sudo ./scripts/setup-usb-detection.sh
+```
+
+This installs udev rules that trigger when an iPad is connected/disconnected.
+
+### How It Works
+
+1. **iPad connects via USB** → udev triggers `usb-monitor.sh`
+2. **ACI issues nonce** → `POST /api/aci/usb/attached/:deviceId`
+3. **FlyGate agent receives nonce** → Signs it with private key
+4. **Agent posts handshake** → `POST /api/aci/handshake`
+5. **ACI verifies signature** → Transitions to FLIGHT_MODE
+
+### View USB Events
+
+```bash
+tail -f /var/log/flygate-usb.log
+```
+
+## API Endpoints
+
+### Status & Capabilities
 - `GET /api/aci/status` - Get current state
-- `GET /api/aci/capabilities` - Get available apps
+- `GET /api/aci/capabilities` - Get available apps for current duty state
+- `GET /api/aci/devices` - List trusted devices
 
-In production, replace the simulate endpoints with real USB/network detection from the FlyGate iPad agent.
+### Handshake Protocol (Production)
+- `GET /api/aci/nonce?device_id=...` - Get nonce for handshake
+- `POST /api/aci/handshake` - Verify signed payload, transition to FLIGHT_MODE
+
+### USB Events (Called by udev)
+- `POST /api/aci/usb/attached/:deviceId` - iPad connected via USB
+- `POST /api/aci/usb/detached` - iPad disconnected
+
+### Simulation (Testing)
+- `POST /api/aci/simulate/attach/:deviceId` - Simulate dock
+- `POST /api/aci/simulate/detach` - Simulate undock
+
+### Device Management
+- `POST /api/aci/devices/register` - Register new trusted device with public key
+
+## FlyGate Agent Integration
+
+The FlyGate iPad agent should:
+
+1. Listen for USB connection to ACI console
+2. Request nonce: `GET /api/aci/nonce?device_id=FlyGateAgent-iPad-0001`
+3. Sign payload with RSA private key:
+   ```json
+   {
+     "nonce": "<received_nonce>",
+     "ts": <unix_timestamp>,
+     "device_id": "FlyGateAgent-iPad-0001"
+   }
+   ```
+4. Post handshake: `POST /api/aci/handshake`
+   ```json
+   {
+     "payload": { "nonce": "...", "ts": ..., "device_id": "..." },
+     "signature_b64": "<base64url_signature>"
+   }
+   ```
+
+On successful handshake, ACI transitions to FLIGHT_MODE and unlocks flight apps.
