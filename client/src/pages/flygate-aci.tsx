@@ -10,21 +10,35 @@ import {
   Shield,
   Wrench,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
+import {
+  fetchStatus,
+  fetchCapabilities,
+  simulateAttach,
+  simulateDetach,
+  type ACIStatus,
+  type AppCapability,
+} from "@/lib/aci-api";
 
-type DutyState = "OFF_DUTY" | "ON_DUTY" | "FLIGHT_MODE";
-
-type ACIState = {
-  dutyState: DutyState;
-  trustedDeviceAttached: boolean;
-  trustedDeviceId: string | null;
-  trustedDeviceName: string | null;
+const iconMap: Record<string, React.ReactNode> = {
+  FileText: <FileText className="h-7 w-7" strokeWidth={1.5} />,
+  Shield: <Shield className="h-7 w-7" strokeWidth={1.5} />,
+  Radio: <Radio className="h-7 w-7" strokeWidth={1.5} />,
+  Wrench: <Wrench className="h-7 w-7" strokeWidth={1.5} />,
+  Cloud: <Cloud className="h-7 w-7" strokeWidth={1.5} />,
+  Map: <Map className="h-7 w-7" strokeWidth={1.5} />,
+  ChartNoAxesCombined: <ChartNoAxesCombined className="h-7 w-7" strokeWidth={1.5} />,
 };
 
 type ACIContextValue = {
-  state: ACIState;
-  simulateDock: () => void;
-  simulateUndock: () => void;
+  status: ACIStatus | null;
+  apps: AppCapability[];
+  loading: boolean;
+  error: string | null;
+  dockDevice: (deviceId: string) => Promise<void>;
+  undockDevice: () => Promise<void>;
+  refresh: () => Promise<void>;
 };
 
 const ACIContext = React.createContext<ACIContextValue | null>(null);
@@ -35,97 +49,75 @@ function useACI() {
   return ctx;
 }
 
-const STORAGE_KEY = "flygate.aci.state.v1";
-
-function loadState(): ACIState {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.dutyState) return parsed;
-    }
-  } catch {}
-  return {
-    dutyState: "ON_DUTY",
-    trustedDeviceAttached: false,
-    trustedDeviceId: null,
-    trustedDeviceName: null,
-  };
-}
-
-function saveState(state: ACIState) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {}
-}
-
 function ACIProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<ACIState>(loadState);
+  const [status, setStatus] = React.useState<ACIStatus | null>(null);
+  const [apps, setApps] = React.useState<AppCapability[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(async () => {
+    try {
+      const [statusData, capsData] = await Promise.all([
+        fetchStatus(),
+        fetchCapabilities(),
+      ]);
+      setStatus(statusData);
+      setApps(capsData.apps);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch");
+    }
+  }, []);
 
   React.useEffect(() => {
-    saveState(state);
-  }, [state]);
+    refresh().finally(() => setLoading(false));
+  }, [refresh]);
 
-  const simulateDock = React.useCallback(() => {
-    setState({
-      dutyState: "FLIGHT_MODE",
-      trustedDeviceAttached: true,
-      trustedDeviceId: "FlyGateAgent-iPad-0001",
-      trustedDeviceName: "Pilot iPad (FlyGate)",
-    });
-  }, []);
+  const dockDevice = React.useCallback(async (deviceId: string) => {
+    setLoading(true);
+    try {
+      await simulateAttach(deviceId);
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to dock");
+    } finally {
+      setLoading(false);
+    }
+  }, [refresh]);
 
-  const simulateUndock = React.useCallback(() => {
-    setState({
-      dutyState: "ON_DUTY",
-      trustedDeviceAttached: false,
-      trustedDeviceId: null,
-      trustedDeviceName: null,
-    });
-  }, []);
+  const undockDevice = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      await simulateDetach();
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to undock");
+    } finally {
+      setLoading(false);
+    }
+  }, [refresh]);
 
   const value = React.useMemo<ACIContextValue>(
-    () => ({ state, simulateDock, simulateUndock }),
-    [state, simulateDock, simulateUndock],
+    () => ({ status, apps, loading, error, dockDevice, undockDevice, refresh }),
+    [status, apps, loading, error, dockDevice, undockDevice, refresh],
   );
 
   return <ACIContext.Provider value={value}>{children}</ACIContext.Provider>;
 }
 
-type AppTile = {
-  id: string;
-  icon: React.ReactNode;
-  label: string;
-};
-
-const onDutyApps: AppTile[] = [
-  { id: "ops", icon: <FileText className="h-7 w-7" strokeWidth={1.5} />, label: "Ops" },
-  { id: "docs", icon: <Shield className="h-7 w-7" strokeWidth={1.5} />, label: "Docs" },
-  { id: "comms", icon: <Radio className="h-7 w-7" strokeWidth={1.5} />, label: "Comms" },
-  { id: "maintenance", icon: <Wrench className="h-7 w-7" strokeWidth={1.5} />, label: "Maint" },
-  { id: "weather", icon: <Cloud className="h-7 w-7" strokeWidth={1.5} />, label: "Weather" },
-];
-
-const flightModeApps: AppTile[] = [
-  { id: "flight-ops", icon: <FileText className="h-7 w-7" strokeWidth={1.5} />, label: "Flight Ops" },
-  { id: "nav", icon: <Map className="h-7 w-7" strokeWidth={1.5} />, label: "Navigation" },
-  { id: "checklists", icon: <Shield className="h-7 w-7" strokeWidth={1.5} />, label: "Checklists" },
-  { id: "performance", icon: <ChartNoAxesCombined className="h-7 w-7" strokeWidth={1.5} />, label: "Perf" },
-  { id: "comms", icon: <Radio className="h-7 w-7" strokeWidth={1.5} />, label: "Comms" },
-  { id: "weather", icon: <Cloud className="h-7 w-7" strokeWidth={1.5} />, label: "Weather" },
-];
-
 type Screen = "launcher" | "settings" | "inflight";
 
 function AppTileButton({
-  tile,
+  app,
   active,
   onClick,
 }: {
-  tile: AppTile;
+  app: AppCapability;
   active?: boolean;
   onClick: () => void;
 }) {
+  const icon = iconMap[app.icon] || <FileText className="h-7 w-7" strokeWidth={1.5} />;
+
   return (
     <button
       type="button"
@@ -136,9 +128,9 @@ function AppTileButton({
           ? "border-[rgba(56,189,248,0.45)] bg-[rgba(56,189,248,0.15)]"
           : "border-white/12 bg-white/5 hover:border-white/20 hover:bg-white/8")
       }
-      data-testid={`tile-${tile.id}`}
+      data-testid={`tile-${app.appId}`}
     >
-      <div className="text-white/85">{tile.icon}</div>
+      <div className="text-white/85">{icon}</div>
     </button>
   );
 }
@@ -157,9 +149,16 @@ function SettingsTileButton({ onClick }: { onClick: () => void }) {
 }
 
 function LauncherScreen({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { state, simulateDock, simulateUndock } = useACI();
-  const isFlightMode = state.dutyState === "FLIGHT_MODE";
-  const apps = isFlightMode ? flightModeApps : onDutyApps;
+  const { status, apps, loading, dockDevice, undockDevice } = useACI();
+  const isFlightMode = status?.dutyState === "FLIGHT_MODE";
+
+  const handleDockToggle = async () => {
+    if (isFlightMode) {
+      await undockDevice();
+    } else {
+      await dockDevice("FlyGateAgent-iPad-0001");
+    }
+  };
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden flygate-surface">
@@ -177,15 +176,17 @@ function LauncherScreen({ onOpenSettings }: { onOpenSettings: () => void }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={isFlightMode ? simulateUndock : simulateDock}
+            onClick={handleDockToggle}
+            disabled={loading}
             className={
-              "rounded-full border px-4 py-1.5 text-xs font-medium transition-colors " +
+              "flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-medium transition-colors " +
               (isFlightMode
                 ? "border-[rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.12)] text-white hover:bg-[rgba(56,189,248,0.18)]"
                 : "border-white/15 bg-white/8 text-white/70 hover:bg-white/12")
             }
             data-testid="button-dock-toggle"
           >
+            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
             {isFlightMode ? "Undock iPad" : "Dock iPad"}
           </button>
           <div
@@ -203,13 +204,25 @@ function LauncherScreen({ onOpenSettings }: { onOpenSettings: () => void }) {
       </header>
 
       <div className="flex flex-1 items-center justify-center px-6 pb-6">
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          {apps.map((tile) => (
-            <AppTileButton key={tile.id} tile={tile} onClick={() => {}} />
-          ))}
-          <SettingsTileButton onClick={onOpenSettings} />
-        </div>
+        {loading && apps.length === 0 ? (
+          <Loader2 className="h-8 w-8 animate-spin text-white/50" />
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            {apps.map((app) => (
+              <AppTileButton key={app.appId} app={app} onClick={() => {}} />
+            ))}
+            <SettingsTileButton onClick={onOpenSettings} />
+          </div>
+        )}
       </div>
+
+      {status?.trustedDeviceAttached && (
+        <div className="px-6 pb-4">
+          <div className="rounded-xl border border-[rgba(56,189,248,0.20)] bg-[rgba(56,189,248,0.08)] px-4 py-2 text-center text-xs text-white/70">
+            Connected: {status.trustedDeviceName} ({status.trustedDeviceId})
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -269,10 +282,10 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
 }
 
 function InflightScreen() {
-  const { state, simulateUndock } = useACI();
-  const [activeApp, setActiveApp] = React.useState<string>("flight-ops");
+  const { status, apps, undockDevice, loading } = useACI();
+  const [activeApp, setActiveApp] = React.useState<string | null>(null);
 
-  const apps = flightModeApps.slice(0, 2);
+  const sideApps = apps.filter((a) => a.appId !== "com.flight.maps").slice(0, 2);
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden flygate-surface">
@@ -290,29 +303,31 @@ function InflightScreen() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={simulateUndock}
-            className="rounded-full border border-white/15 bg-white/8 px-4 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/12"
+            onClick={undockDevice}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/12"
             data-testid="button-exit-inflight"
           >
+            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
             Exit Inflight
           </button>
           <div
             className="rounded-full border border-[rgba(56,189,248,0.25)] bg-[rgba(56,189,248,0.10)] px-3 py-1 text-xs text-white/90"
             data-testid="status-inflight"
           >
-            {state.trustedDeviceName || "iPad Connected"}
+            {status?.trustedDeviceName || "iPad Connected"}
           </div>
         </div>
       </header>
 
       <div className="flex flex-1 gap-4 px-6 pb-6">
         <div className="flex w-[140px] flex-col gap-3">
-          {apps.map((tile) => (
+          {sideApps.map((app) => (
             <AppTileButton
-              key={tile.id}
-              tile={tile}
-              active={activeApp === tile.id}
-              onClick={() => setActiveApp(tile.id)}
+              key={app.appId}
+              app={app}
+              active={activeApp === app.appId}
+              onClick={() => setActiveApp(app.appId)}
             />
           ))}
         </div>
@@ -350,22 +365,22 @@ function InflightScreen() {
 }
 
 function FlyGateACIApp() {
-  const { state } = useACI();
+  const { status } = useACI();
   const [screen, setScreen] = React.useState<Screen>("launcher");
 
   React.useEffect(() => {
-    if (state.dutyState === "FLIGHT_MODE") {
+    if (status?.dutyState === "FLIGHT_MODE") {
       setScreen("inflight");
     } else if (screen === "inflight") {
       setScreen("launcher");
     }
-  }, [state.dutyState, screen]);
+  }, [status?.dutyState, screen]);
 
   if (screen === "settings") {
     return <SettingsScreen onBack={() => setScreen("launcher")} />;
   }
 
-  if (screen === "inflight" || state.dutyState === "FLIGHT_MODE") {
+  if (screen === "inflight" || status?.dutyState === "FLIGHT_MODE") {
     return <InflightScreen />;
   }
 
