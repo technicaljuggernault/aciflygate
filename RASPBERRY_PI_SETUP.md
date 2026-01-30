@@ -11,7 +11,9 @@ Deploy FlyGate ACI on a Raspberry Pi for cockpit-embedded tablet control.
 
 ## Quick Install
 
-### Option 1: Install from Pre-built Package
+### Option 1: Install from Deployment Package
+
+The deployment package contains the pre-built frontend/backend but **installs dependencies directly on your Pi** to ensure ARM compatibility.
 
 1. Download the deployment package to your Pi
 2. Extract and install:
@@ -21,6 +23,8 @@ tar -xzf flygate-aci-YYYYMMDD.tar.gz
 cd flygate-aci-YYYYMMDD
 sudo ./install-pi.sh
 ```
+
+> **Note:** The installer runs `npm install` on the Pi to ensure native modules are compiled for ARM architecture.
 
 ### Option 2: Build from Source
 

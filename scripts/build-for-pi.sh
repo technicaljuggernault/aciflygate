@@ -20,18 +20,13 @@ mkdir -p "deploy/$DIST_NAME"
 
 cp -r dist "deploy/$DIST_NAME/"
 cp package.json "deploy/$DIST_NAME/"
+cp package-lock.json "deploy/$DIST_NAME/" 2>/dev/null || true
 cp .env.local "deploy/$DIST_NAME/.env" 2>/dev/null || echo "PORT=5000" > "deploy/$DIST_NAME/.env"
 cp scripts/install-pi.sh "deploy/$DIST_NAME/"
 cp scripts/flygate-aci.service "deploy/$DIST_NAME/"
 
 echo ""
-echo "[4/4] Installing production dependencies..."
-cd "deploy/$DIST_NAME"
-npm install --omit=dev
-cd ../..
-
-echo ""
-echo "[5/5] Creating tarball..."
+echo "[4/4] Creating tarball..."
 cd deploy
 tar -czf "$DIST_NAME.tar.gz" "$DIST_NAME"
 cd ..

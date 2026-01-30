@@ -14,7 +14,7 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "[1/6] Installing Node.js 20.x..."
+echo "[1/7] Installing Node.js 20.x..."
 if ! command -v node &> /dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
@@ -23,22 +23,28 @@ else
 fi
 
 echo ""
-echo "[2/6] Creating installation directory..."
+echo "[2/7] Creating installation directory..."
 mkdir -p "$INSTALL_DIR"
 
 echo ""
-echo "[3/6] Copying application files..."
+echo "[3/7] Copying application files..."
 cp -r dist "$INSTALL_DIR/"
-cp -r node_modules "$INSTALL_DIR/" 2>/dev/null || true
 cp package.json "$INSTALL_DIR/"
-cp .env.local "$INSTALL_DIR/.env" 2>/dev/null || true
+cp package-lock.json "$INSTALL_DIR/" 2>/dev/null || true
+cp .env.local "$INSTALL_DIR/.env" 2>/dev/null || echo "PORT=5000" > "$INSTALL_DIR/.env"
 
 echo ""
-echo "[4/6] Setting ownership..."
+echo "[4/7] Installing production dependencies on target..."
+cd "$INSTALL_DIR"
+npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+cd -
+
+echo ""
+echo "[5/7] Setting ownership..."
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 
 echo ""
-echo "[5/6] Installing systemd service..."
+echo "[6/7] Installing systemd service..."
 cat > /etc/systemd/system/flygate-aci.service << EOF
 [Unit]
 Description=FlyGate ACI - Aviation Control Interface
@@ -62,7 +68,7 @@ systemctl daemon-reload
 systemctl enable flygate-aci
 
 echo ""
-echo "[6/6] Starting FlyGate ACI service..."
+echo "[7/7] Starting FlyGate ACI service..."
 systemctl start flygate-aci
 
 echo ""
