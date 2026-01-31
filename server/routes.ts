@@ -7,6 +7,16 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  app.get("/api/aci/health", (_req, res) => {
+    res.json({ 
+      status: "OK", 
+      service: "FlyGate ACI Console",
+      version: "1.0.0",
+      timestamp: Date.now(),
+      ready: true
+    });
+  });
+
   app.get("/api/aci/status", (_req, res) => {
     res.json(aciState.getStatus());
   });
@@ -86,21 +96,35 @@ export async function registerRoutes(
   });
 
   app.post("/api/aci/devices/register", (req, res) => {
-    const { device_id, device_name, public_key_pem } = req.body;
+    const { device_id, device_name, public_key_pem, public_key_base64, public_key_jwk } = req.body;
     
     if (!device_id || !device_name) {
       return res.status(400).json({ error: "Missing device_id or device_name" });
     }
     
-    if (!public_key_pem) {
-      return res.status(400).json({ error: "Missing public_key_pem - required for secure handshake" });
+    let finalPem = public_key_pem;
+    
+    if (!finalPem && public_key_base64) {
+      finalPem = `-----BEGIN PUBLIC KEY-----\n${public_key_base64}\n-----END PUBLIC KEY-----`;
+    }
+    
+    if (!finalPem && public_key_jwk) {
+      return res.status(400).json({ 
+        error: "JWK format not yet supported. Please provide public_key_pem or public_key_base64" 
+      });
+    }
+    
+    if (!finalPem) {
+      return res.status(400).json({ 
+        error: "Missing public key. Provide public_key_pem (PEM format) or public_key_base64 (base64 DER)" 
+      });
     }
 
-    const success = aciState.registerTrustedDevice(device_id, device_name, public_key_pem);
+    const success = aciState.registerTrustedDevice(device_id, device_name, finalPem);
     if (!success) {
       return res.status(400).json({ error: "Failed to register device" });
     }
-    res.json({ status: "OK", message: `Device ${device_name} registered.` });
+    res.json({ status: "OK", message: `Device ${device_name} registered.`, device_id });
   });
 
   return httpServer;
