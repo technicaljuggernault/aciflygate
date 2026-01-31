@@ -2,7 +2,7 @@
 # FlyGate ACI - USB Monitor Script
 # Triggered by udev when iPad is connected/disconnected
 
-ACI_URL="${ACI_URL:-http://localhost:5000}"
+ACI_URL="${ACI_URL:-http://localhost:8080}"
 LOG_FILE="/var/log/flygate-usb.log"
 DEVICE_ID="${1:-FlyGateAgent-iPad-0001}"
 ACTION="${2:-attach}"

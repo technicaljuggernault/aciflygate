@@ -31,7 +31,7 @@ echo "[3/7] Copying application files..."
 cp -r dist "$INSTALL_DIR/"
 cp package.json "$INSTALL_DIR/"
 cp package-lock.json "$INSTALL_DIR/" 2>/dev/null || true
-cp .env.local "$INSTALL_DIR/.env" 2>/dev/null || echo "PORT=5000" > "$INSTALL_DIR/.env"
+cp .env.local "$INSTALL_DIR/.env" 2>/dev/null || echo "PORT=8080" > "$INSTALL_DIR/.env"
 
 echo ""
 echo "[4/7] Installing production dependencies on target..."
@@ -58,7 +58,7 @@ ExecStart=/usr/bin/node $INSTALL_DIR/dist/index.cjs
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
-Environment=PORT=5000
+Environment=PORT=8080
 
 [Install]
 WantedBy=multi-user.target
@@ -77,8 +77,8 @@ echo "  Installation Complete!"
 echo "========================================="
 echo ""
 echo "FlyGate ACI is now running at:"
-echo "  http://$(hostname -I | awk '{print $1}'):5000"
-echo "  http://$(hostname).local:5000"
+echo "  http://$(hostname -I | awk '{print $1}'):8080"
+echo "  http://$(hostname).local:8080"
 echo ""
 echo "Commands:"
 echo "  sudo systemctl status flygate-aci   # Check status"

@@ -55,8 +55,8 @@ sudo ./scripts/install-pi.sh
 
 After installation, FlyGate ACI runs at:
 
-- `http://<pi-ip-address>:5000`
-- `http://raspberrypi.local:5000` (if mDNS is enabled)
+- `http://<pi-ip-address>:8080`
+- `http://raspberrypi.local:8080` (if mDNS is enabled)
 
 Connect your cockpit tablet browser to this address.
 
@@ -84,7 +84,7 @@ sudo systemctl disable flygate-aci
 Edit `/opt/flygate-aci/.env` to configure:
 
 ```env
-PORT=5000              # Server port
+PORT=8080              # Server port
 NODE_ENV=production    # Environment mode
 ```
 
@@ -107,9 +107,9 @@ static domain_name_servers=192.168.1.1
 
 ### Firewall
 
-If using `ufw`, allow port 5000:
+If using `ufw`, allow port 8080:
 ```bash
-sudo ufw allow 5000/tcp
+sudo ufw allow 8080/tcp
 ```
 
 ## Auto-start on Boot
@@ -131,7 +131,7 @@ sudo journalctl -u flygate-aci -n 50 --no-pager
 
 ### Port already in use
 ```bash
-sudo lsof -i :5000
+sudo lsof -i :8080
 sudo kill <PID>
 sudo systemctl start flygate-aci
 ```
