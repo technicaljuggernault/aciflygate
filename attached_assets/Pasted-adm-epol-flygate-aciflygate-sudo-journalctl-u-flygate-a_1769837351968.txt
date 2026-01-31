@@ -1,0 +1,28 @@
+adm_epol@flygate:~/aciflygate $ sudo journalctl -u flygate-aci -n 50
+Jan 30 22:56:17 flygate systemd[1]: Stopped flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 22:56:17 flygate systemd[1]: flygate-aci.service: Consumed 1.177s CPU time.
+Jan 30 22:56:17 flygate systemd[1]: Started flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 22:56:18 flygate node[4677]: 10:56:18 PM [express] serving on port 8080
+Jan 30 22:56:58 flygate node[4677]: 10:56:58 PM [express] OPTIONS /api/aci/status 200 in 8>
+Jan 30 22:58:31 flygate node[4677]: 10:58:31 PM [express] GET /api/aci/status 200 in 22ms >
+Jan 30 23:04:01 flygate systemd[1]: Stopping flygate-aci.service - FlyGate ACI - Aviation >
+Jan 30 23:04:01 flygate systemd[1]: flygate-aci.service: Deactivated successfully.
+Jan 30 23:04:01 flygate systemd[1]: Stopped flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 23:04:01 flygate systemd[1]: flygate-aci.service: Consumed 1.179s CPU time.
+Jan 30 23:04:01 flygate systemd[1]: Started flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 23:04:02 flygate node[4764]: 11:04:02 PM [express] serving on port 8080
+Jan 30 23:04:10 flygate node[4764]: 11:04:10 PM [express] OPTIONS /api/aci/status 200 in 7>
+Jan 30 23:09:24 flygate node[4764]: 11:09:24 PM [express] OPTIONS /api/aci/status 200 in 1>
+Jan 30 23:14:45 flygate systemd[1]: Stopping flygate-aci.service - FlyGate ACI - Aviation >
+Jan 30 23:14:45 flygate systemd[1]: flygate-aci.service: Deactivated successfully.
+Jan 30 23:14:45 flygate systemd[1]: Stopped flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 23:14:45 flygate systemd[1]: flygate-aci.service: Consumed 1.052s CPU time.
+Jan 30 23:14:45 flygate systemd[1]: Started flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 23:14:46 flygate node[4945]: 11:14:46 PM [express] serving on port 8080
+Jan 30 23:14:51 flygate node[4945]: 11:14:51 PM [express] OPTIONS /api/aci/status 200 in 5>
+Jan 30 23:16:44 flygate systemd[1]: Stopping flygate-aci.service - FlyGate ACI - Aviation >
+Jan 30 23:16:44 flygate systemd[1]: flygate-aci.service: Deactivated successfully.
+Jan 30 23:16:44 flygate systemd[1]: Stopped flygate-aci.service - FlyGate ACI - Aviation C>
+Jan 30 23:16:44 flygate systemd[1]: flygate-aci.service: Consumed 1.082s CPU time.
+Jan 30 23:16:44 flygate systemd[1]: Started flygate-aci.service - FlyGate ACI - Aviation C>
+lines 1-26
