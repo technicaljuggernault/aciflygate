@@ -1,0 +1,305 @@
+1) Replit Agent Instructions — ACI App (Raspberry Pi Kiosk UI + Gatekeeper)
+Goal
+
+Build an ACI web app that runs locally on the Raspberry Pi 4 and displays:
+
+Locked screen by default
+
+Flight Minimum Apps launcher (tiles) only when:
+
+it can reach FlyGate over Ethernet, and
+
+FlyGate reports duty_state = ON_DUTY, and
+
+the duty assertion passes validation (nonce + TTL + HMAC)
+
+The ACI app is Model A: it displays tiles and launches ACI-hosted pages (simple placeholder modules are fine for POC).
+
+Tech Stack (recommended for speed)
+
+Node.js + Express
+
+WebSocket (or SSE) for real-time lock/unlock status in the UI
+
+Minimal frontend (vanilla JS or simple React—vanilla is fastest)
+
+Runs on port 8080 (Pi-friendly, no sudo required)
+
+Networking assumption
+
+ACI (Pi) can reach FlyGate at a resolvable host:
+
+Primary: http://flygate.local:5000 (mDNS)
+
+Fallback: http://172.16.0.2:5000 (iPad static IP if you choose later)
+
+ACI itself is accessed locally: http://localhost:8080
+
+ACI Components
+A) Gatekeeper service (inside the Node app)
+
+A background loop that runs every 2 seconds:
+
+Generate a random nonce
+
+Call FlyGate endpoint: GET /api/duty?nonce=...&aci_id=...
+
+Validate:
+
+signature (HMAC) matches
+
+ttl_seconds not expired
+
+returned nonce matches request nonce
+
+duty_state === "ON_DUTY"
+
+If valid → set ACI state to UNLOCKED
+
+If invalid / unreachable → set ACI state to LOCKED
+
+Broadcast state changes to UI via WebSocket.
+
+B) ACI UI
+
+Routes:
+
+/ = Launcher shell
+
+If locked: show “Connect FlyGate + Go OnDuty”
+
+If unlocked: show tiles
+
+/apps/weather
+
+/apps/docs
+
+/apps/charts
+
+/apps/notes
+
+/apps/messages
+(These can be placeholders with big headings. The key is the gating.)
+
+C) ACI State Model
+
+Keep in-memory + persist minimal state to disk (optional):
+
+lock_state: LOCKED | UNLOCKED
+
+last_verified_at
+
+last_error
+
+last_duty_payload (redact secret fields)
+
+ACI Data Schema (JSON)
+AciState
+{
+  "aci_id": "aci-pi4-001",
+  "lock_state": "LOCKED",
+  "last_verified_at": "2026-02-01T00:00:00Z",
+  "last_error": "string|null",
+  "flygate": {
+    "reachable": false,
+    "last_seen_at": "2026-02-01T00:00:00Z"
+  }
+}
+
+DutyAssertion (received from FlyGate)
+{
+  "aci_id": "aci-pi4-001",
+  "nonce": "hexstring",
+  "issued_at": "ISO8601",
+  "ttl_seconds": 30,
+  "device_id": "ios-device-hash",
+  "user": { "id": "crew123", "role": "pilot" },
+  "duty_state": "ON_DUTY",
+  "signature": "base64-hmac"
+}
+
+HMAC Signature Rule (POC)
+
+Shared secret env var on both apps: FLYGATE_ACI_SHARED_SECRET
+
+Canonical string to sign (exact order, pipe-delimited):
+
+aci_id|nonce|issued_at|ttl_seconds|device_id|user.id|user.role|duty_state
+
+
+Signature = base64(HMAC-SHA256(secret, canonical_string))
+
+ACI API Endpoints (local)
+
+GET /api/state → returns AciState
+
+WS /ws → pushes { lock_state, last_error, last_verified_at }
+
+Deliverables
+
+Node/Express app that runs in Replit
+
+Configuration via .env:
+
+ACI_ID=aci-pi4-001
+
+FLYGATE_BASE_URL=http://flygate.local:5000
+
+FLYGATE_ACI_SHARED_SECRET=...
+
+POLL_INTERVAL_MS=2000
+
+DUTY_TTL_MAX_SECONDS=60
+
+README with Pi kiosk command:
+
+chromium-browser --kiosk http://localhost:8080 --incognito --noerrdialogs --disable-session-crashed-bubble
+
+2) Replit Agent Instructions — FlyGate App (Duty State Service + POC UI)
+Goal
+
+Build FlyGate (web app or minimal native-like web UI) that:
+
+Lets a user toggle duty state: OFF_DUTY ↔ ON_DUTY
+
+Exposes a Duty Assertion API the ACI Gatekeeper can poll
+
+Signs responses with HMAC using the shared secret
+
+Runs on port 5000 (matches what you’re already doing)
+
+Tech Stack (recommended)
+
+Node.js + Express (or Flask—Node matches ACI)
+
+Simple frontend page for toggling duty state
+
+FlyGate Components
+A) Duty State Store
+
+In-memory store is fine for POC:
+
+currentDutyState: "OFF_DUTY" | "ON_DUTY"
+
+device_id: a stable value (POC can be a generated UUID stored in a file)
+
+current_user: { id, role } hardcoded or simple input
+
+B) FlyGate UI
+
+/ page:
+
+Shows current duty state
+
+Button to toggle ON/OFF
+
+Shows “ACI last requested at …” (optional)
+
+C) FlyGate Duty Assertion API
+
+Endpoint:
+
+GET /api/duty?nonce=<nonce>&aci_id=<aci_id>
+
+Rules:
+
+Read nonce and aci_id from query
+
+Build response payload:
+
+issued_at = now
+
+ttl_seconds = 30
+
+duty_state = currentDutyState
+
+include device_id, user
+
+Compute signature with the shared secret (same canonical string)
+
+Return JSON DutyAssertion
+
+Also include:
+
+GET /api/health → 200 OK for reachability
+
+FlyGate Data Schema
+FlyGateState
+{
+  "device_id": "ios-device-hash",
+  "user": { "id": "crew123", "role": "pilot" },
+  "duty_state": "OFF_DUTY",
+  "updated_at": "ISO8601"
+}
+
+Env Vars
+
+PORT=5000
+
+FLYGATE_DEVICE_ID=... (generate if missing)
+
+FLYGATE_USER_ID=crew123
+
+FLYGATE_USER_ROLE=pilot
+
+FLYGATE_ACI_SHARED_SECRET=...
+
+DUTY_TTL_SECONDS=30
+
+Signature Rule (must match ACI exactly)
+
+Canonical string:
+
+aci_id|nonce|issued_at|ttl_seconds|device_id|user.id|user.role|duty_state
+
+Deliverables
+
+Express app with UI + API
+
+README:
+
+how to run on iPad network (for POC):
+
+Use flygate.local on the iPad by setting hostname on the host running FlyGate (or run FlyGate directly on the iPad if you later go native)
+
+For now, if FlyGate is hosted elsewhere, you’ll need it reachable from Pi over the Ethernet link (mDNS or IP)
+
+3) System Behavior Requirements (both agents must honor)
+Lock/unlock policy
+
+ACI is LOCKED if:
+
+cannot reach FlyGate, OR
+
+signature invalid, OR
+
+TTL expired, OR
+
+duty_state != ON_DUTY
+
+ACI is UNLOCKED only if:
+
+last valid duty assertion is within TTL and says ON_DUTY
+
+UI expectations
+
+Locked screen is obvious and cockpit-friendly:
+
+“CONNECT FLYGATE + SET ON DUTY”
+
+Unlocked screen shows at least 5 tiles:
+
+Weather, Docs, Charts, Notes, Messages
+
+4) Implementation Notes (so the POC doesn’t stall)
+About flygate.local
+
+For the POC, make sure Pi can resolve FlyGate:
+
+If FlyGate is running on another device, give it a stable hostname or use its IP.
+
+If mDNS is flaky, use the IP directly in FLYGATE_BASE_URL.
+
+About “USB-C to Ethernet”
+
+This is the right move: treat it as wired network, not raw USB messaging.

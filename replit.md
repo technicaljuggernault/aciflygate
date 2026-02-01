@@ -28,7 +28,8 @@ The frontend follows a dark theme optimized for cockpit visibility, using the Ox
 
 Key backend modules:
 - `server/aci-state.ts`: Manages duty state transitions and app capabilities per state
-- `server/routes.ts`: API endpoint definitions
+- `server/gatekeeper.ts`: Gatekeeper service that polls FlyGate for duty assertions with HMAC validation
+- `server/routes.ts`: API endpoint definitions with WebSocket support
 - `server/storage.ts`: User storage abstraction (currently in-memory)
 
 ### State Machine Design
@@ -75,3 +76,27 @@ Custom build script (`script/build.ts`) that:
 - `wouter`: Client-side routing
 - `express`: HTTP server
 - `tsx`: TypeScript execution for development
+- `ws`: WebSocket server for real-time state updates
+
+## Environment Variables (Gatekeeper)
+
+For the ACI Gatekeeper to poll FlyGate for duty assertions:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ACI_ID` | Unique identifier for this ACI instance | `aci-pi4-001` |
+| `FLYGATE_BASE_URL` | URL of the FlyGate duty service | `http://flygate.local:5000` |
+| `FLYGATE_ACI_SHARED_SECRET` | HMAC shared secret for signature validation | (required for gatekeeper) |
+| `POLL_INTERVAL_MS` | How often to poll FlyGate in milliseconds | `2000` |
+| `DUTY_TTL_MAX_SECONDS` | Maximum age of duty assertions | `60` |
+
+If `FLYGATE_ACI_SHARED_SECRET` is not set, the gatekeeper will be disabled and the UI will start unlocked by default.
+
+### HMAC Signature Format
+
+Canonical string (pipe-delimited):
+```
+aci_id|nonce|issued_at|ttl_seconds|device_id|user.id|user.role|duty_state
+```
+
+Signature = `base64(HMAC-SHA256(secret, canonical_string))`

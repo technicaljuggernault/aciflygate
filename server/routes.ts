@@ -1,12 +1,57 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import { type Server } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { aciState } from "./aci-state";
+import { gatekeeper, type AciState } from "./gatekeeper";
+
+const wsClients: Set<WebSocket> = new Set();
+
+function broadcastState(state: AciState): void {
+  const message = JSON.stringify({
+    type: "state_change",
+    data: state,
+  });
+  
+  wsClients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+
+  wss.on("connection", (ws) => {
+    wsClients.add(ws);
+    console.log("[websocket] Client connected");
+
+    ws.send(JSON.stringify({
+      type: "state_change",
+      data: gatekeeper.getState(),
+    }));
+
+    ws.on("close", () => {
+      wsClients.delete(ws);
+      console.log("[websocket] Client disconnected");
+    });
+
+    ws.on("error", (error) => {
+      console.error("[websocket] Error:", error);
+      wsClients.delete(ws);
+    });
+  });
+
+  gatekeeper.on("stateChange", (state: AciState) => {
+    broadcastState(state);
+  });
+
+  gatekeeper.start();
+
   app.get("/api/aci/health", (_req, res) => {
     res.json({ 
       status: "OK", 
@@ -15,6 +60,27 @@ export async function registerRoutes(
       timestamp: Date.now(),
       ready: true
     });
+  });
+
+  app.get("/api/state", (_req, res) => {
+    res.json(gatekeeper.getState());
+  });
+
+  app.get("/api/gatekeeper/config", (_req, res) => {
+    res.json({
+      ...gatekeeper.getConfig(),
+      enabled: gatekeeper.isEnabled(),
+    });
+  });
+
+  app.post("/api/gatekeeper/unlock", (_req, res) => {
+    gatekeeper.manualUnlock();
+    res.json({ status: "OK", message: "Manually unlocked", state: gatekeeper.getState() });
+  });
+
+  app.post("/api/gatekeeper/lock", (_req, res) => {
+    gatekeeper.manualLock();
+    res.json({ status: "OK", message: "Manually locked", state: gatekeeper.getState() });
   });
 
   app.get("/api/aci/status", (_req, res) => {

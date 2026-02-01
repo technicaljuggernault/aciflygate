@@ -11,6 +11,10 @@ import {
   Wrench,
   ChevronLeft,
   Loader2,
+  Lock,
+  Unlock,
+  WifiOff,
+  Wifi,
 } from "lucide-react";
 import {
   fetchStatus,
@@ -20,6 +24,7 @@ import {
   type ACIStatus,
   type AppCapability,
 } from "@/lib/aci-api";
+import { useGatekeeperState } from "@/lib/gatekeeper-ws";
 
 const iconMap: Record<string, React.ReactNode> = {
   FileText: <FileText className="h-7 w-7" strokeWidth={1.5} />,
@@ -364,8 +369,74 @@ function InflightScreen() {
   );
 }
 
+function LockScreen() {
+  const { state, connected, manualUnlock } = useGatekeeperState();
+
+  return (
+    <div className="flex h-screen w-full flex-col items-center justify-center overflow-hidden flygate-surface">
+      <div className="flex flex-col items-center gap-8">
+        <div className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-white/20 bg-white/5">
+          <Lock className="h-12 w-12 text-white/60" strokeWidth={1.5} />
+        </div>
+
+        <div className="text-center">
+          <h1
+            className="text-2xl font-bold tracking-wide text-white"
+            style={{ fontFamily: "Oxanium, var(--font-sans)" }}
+            data-testid="text-lock-title"
+          >
+            CONNECT FLYGATE + SET ON DUTY
+          </h1>
+          <p className="mt-2 text-sm text-white/50" data-testid="text-lock-subtitle">
+            Waiting for FlyGate duty assertion...
+          </p>
+        </div>
+
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex items-center gap-2">
+            {state?.flygate.reachable ? (
+              <Wifi className="h-4 w-4 text-green-400" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-red-400" />
+            )}
+            <span className="text-xs text-white/60">
+              FlyGate: {state?.flygate.reachable ? "Reachable" : "Unreachable"}
+            </span>
+          </div>
+
+          {state?.last_error && (
+            <div className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-center text-xs text-red-300" data-testid="text-lock-error">
+              {state.last_error}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 text-xs text-white/40">
+            <div className={`h-2 w-2 rounded-full ${connected ? "bg-green-400" : "bg-red-400"}`} />
+            WebSocket: {connected ? "Connected" : "Disconnected"}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={manualUnlock}
+          className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-6 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/15"
+          data-testid="button-manual-unlock"
+        >
+          <Unlock className="h-4 w-4" />
+          Manual Unlock (Dev)
+        </button>
+      </div>
+
+      <div className="absolute bottom-6 text-center text-xs text-white/30">
+        ACI ID: {state?.aci_id || "Loading..."}
+      </div>
+    </div>
+  );
+}
+
 function FlyGateACIApp() {
   const { status } = useACI();
+  const { isLocked, state } = useGatekeeperState();
   const [screen, setScreen] = React.useState<Screen>("launcher");
 
   React.useEffect(() => {
@@ -375,6 +446,10 @@ function FlyGateACIApp() {
       setScreen("launcher");
     }
   }, [status?.dutyState, screen]);
+
+  if (isLocked && state !== null) {
+    return <LockScreen />;
+  }
 
   if (screen === "settings") {
     return <SettingsScreen onBack={() => setScreen("launcher")} />;
