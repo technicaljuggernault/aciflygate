@@ -147,20 +147,6 @@ export async function registerRoutes(
     res.json({ status: "OK", message: result.message, state: aciState.getStatus() });
   });
 
-  app.post("/api/aci/simulate/attach/:deviceId", (req, res) => {
-    const { deviceId } = req.params;
-    const result = aciState.simulateAttach(deviceId);
-    if (!result.success) {
-      return res.status(404).json({ error: result.message });
-    }
-    res.json({ status: "OK", message: result.message, state: aciState.getStatus() });
-  });
-
-  app.post("/api/aci/simulate/detach", (_req, res) => {
-    const result = aciState.simulateDetach();
-    res.json({ status: "OK", message: result.message, state: aciState.getStatus() });
-  });
-
   app.post("/api/aci/devices/register", (req, res) => {
     const { device_id, device_name, public_key_pem, public_key_base64, public_key_jwk } = req.body;
     

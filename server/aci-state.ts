@@ -226,31 +226,6 @@ class ACIState {
     return { success: true, message: "Device detached. Back to ON_DUTY." };
   }
 
-  simulateAttach(deviceId: string): { success: boolean; message: string } {
-    const trusted = trustedDevices.find((d) => d.deviceId === deviceId);
-    if (!trusted) {
-      return { success: false, message: "Unknown device_id" };
-    }
-
-    this.state.trustedDeviceAttached = true;
-    this.state.trustedDeviceId = trusted.deviceId;
-    this.state.trustedDeviceName = trusted.deviceName;
-    this.state.dutyState = "FLIGHT_MODE";
-    this.state.activeApps = flightModeApps.map((a) => a.appId);
-    this.state.lastTransitionEpoch = Date.now();
-    this.state.lastHandshakeOk = true;
-    this.state.lastError = null;
-
-    return {
-      success: true,
-      message: `Trusted device ${trusted.deviceName} attached. Flight Mode enabled.`,
-    };
-  }
-
-  simulateDetach(): { success: boolean; message: string } {
-    return this.onUsbDetached();
-  }
-
   getTrustedDevices() {
     return trustedDevices.map(d => ({ deviceId: d.deviceId, deviceName: d.deviceName }));
   }

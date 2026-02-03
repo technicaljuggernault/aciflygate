@@ -46,18 +46,3 @@ export async function fetchDevices(): Promise<{ devices: TrustedDevice[] }> {
   return res.json();
 }
 
-export async function simulateAttach(deviceId: string): Promise<{ status: string; message: string; state: ACIStatus }> {
-  const res = await fetch(`/api/aci/simulate/attach/${encodeURIComponent(deviceId)}`, {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to attach device");
-  return res.json();
-}
-
-export async function simulateDetach(): Promise<{ status: string; message: string; state: ACIStatus }> {
-  const res = await fetch("/api/aci/simulate/detach", {
-    method: "POST",
-  });
-  if (!res.ok) throw new Error("Failed to detach device");
-  return res.json();
-}

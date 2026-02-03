@@ -81,21 +81,86 @@ sudo systemctl disable flygate-aci
 
 ## Configuration
 
-Edit `/opt/flygate-aci/.env` to configure:
+### Environment Variables
 
-```env
-PORT=8080              # Server port
-NODE_ENV=production    # Environment mode
+Create a systemd override file to configure the ACI:
+
+```bash
+sudo mkdir -p /etc/systemd/system/flygate-aci.service.d
+sudo nano /etc/systemd/system/flygate-aci.service.d/override.conf
 ```
 
-Restart the service after changes:
+Add the following:
+
+```ini
+[Service]
+Environment="FLYGATE_BASE_URL=http://10.0.0.2:5000"
+Environment="FLYGATE_ACI_SHARED_SECRET=your-shared-secret-here"
+Environment="ACI_ID=aci-pi4-001"
+Environment="POLL_INTERVAL_MS=2000"
+Environment="DUTY_TTL_MAX_SECONDS=60"
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FLYGATE_BASE_URL` | URL of the FlyGate Duty service (iPad) | `http://flygate.local:5000` |
+| `FLYGATE_ACI_SHARED_SECRET` | HMAC shared secret for signature validation | (required) |
+| `ACI_ID` | Unique identifier for this ACI instance | `aci-pi4-001` |
+| `POLL_INTERVAL_MS` | How often to poll FlyGate in milliseconds | `2000` |
+| `DUTY_TTL_MAX_SECONDS` | Maximum age of duty assertions | `60` |
+
+Apply changes:
 ```bash
+sudo systemctl daemon-reload
 sudo systemctl restart flygate-aci
 ```
 
-## Network Configuration
+## Network Configuration (iPad USB-Ethernet Connection)
 
-### Static IP (Recommended for Cockpit Use)
+For direct iPad-to-Pi connection via USB-C Ethernet adapter:
+
+### Step 1: Configure Pi Static IP
+
+Create netplan config:
+```bash
+sudo nano /etc/netplan/99-ethernet-static.yaml
+```
+
+Add:
+```yaml
+network:
+  version: 2
+  ethernets:
+    eth0:
+      addresses:
+        - 10.0.0.1/24
+      dhcp4: false
+```
+
+Apply and fix permissions:
+```bash
+sudo chmod 600 /etc/netplan/99-ethernet-static.yaml
+sudo netplan apply
+```
+
+### Step 2: Configure iPad Static IP
+
+1. Connect USB-C Ethernet adapter to iPad
+2. Go to Settings → Ethernet
+3. Tap the Ethernet network → Configure IP → Manual
+4. Set:
+   - IP Address: `10.0.0.2`
+   - Subnet Mask: `255.255.255.0`
+   - Router: (leave blank)
+
+### Step 3: Verify Connection
+
+From Pi terminal:
+```bash
+ping 10.0.0.2
+```
+
+### Alternative: Traditional Network Static IP
 
 Edit `/etc/dhcpcd.conf`:
 ```
@@ -142,86 +207,77 @@ node --version  # Should be 20.x
 npm --version
 ```
 
-## USB Detection Setup
-
-Enable automatic iPad detection via USB:
-
-```bash
-sudo ./scripts/setup-usb-detection.sh
-```
-
-This installs udev rules that trigger when an iPad is connected/disconnected.
-
-### How It Works
-
-1. **iPad connects via USB** → udev triggers `usb-monitor.sh`
-2. **ACI issues nonce** → `POST /api/aci/usb/attached/:deviceId`
-3. **FlyGate agent receives nonce** → Signs it with private key
-4. **Agent posts handshake** → `POST /api/aci/handshake`
-5. **ACI verifies signature** → Transitions to FLIGHT_MODE
-
-### View USB Events
-
-```bash
-tail -f /var/log/flygate-usb.log
-```
-
 ## API Endpoints
 
+### Gatekeeper State
+- `GET /api/state` - Get current gatekeeper lock state
+- `GET /api/gatekeeper/config` - Get gatekeeper configuration
+- `POST /api/gatekeeper/unlock` - Manual unlock (development only)
+- `POST /api/gatekeeper/lock` - Manual lock
+- `WS /ws` - WebSocket for real-time lock state updates
+
 ### Status & Capabilities
-- `GET /api/aci/status` - Get current state
+- `GET /api/aci/health` - Health check endpoint
+- `GET /api/aci/status` - Get current ACI state
 - `GET /api/aci/capabilities` - Get available apps for current duty state
 - `GET /api/aci/devices` - List trusted devices
-
-### Handshake Protocol (Production)
-- `GET /api/aci/nonce?device_id=...` - Get nonce for handshake
-- `POST /api/aci/handshake` - Verify signed payload, transition to FLIGHT_MODE
-
-### USB Events (Called by udev)
-- `POST /api/aci/usb/attached/:deviceId` - iPad connected via USB
-- `POST /api/aci/usb/detached` - iPad disconnected
-
-### Simulation (Testing)
-- `POST /api/aci/simulate/attach/:deviceId` - Simulate dock
-- `POST /api/aci/simulate/detach` - Simulate undock
 
 ### Device Management
 - `POST /api/aci/devices/register` - Register new trusted device with public key
 
-## FlyGate Agent Integration
+## FlyGate Duty Service Integration
 
-The FlyGate iPad agent should:
+The ACI uses a Gatekeeper that polls the FlyGate Duty service for duty assertions. The FlyGate Duty service (running on iPad or elsewhere) must implement:
 
-1. Listen for USB connection to ACI console
-2. Request nonce: `GET /api/aci/nonce?device_id=FlyGateAgent-iPad-0001`
-3. Create canonical payload JSON (keys sorted alphabetically, no whitespace):
-   ```
-   {"device_id":"FlyGateAgent-iPad-0001","nonce":"<received_nonce>","ts":<unix_timestamp>}
-   ```
-4. Sign the canonical JSON with RSA-SHA256 private key
-5. Encode signature as base64url (URL-safe base64, no padding)
-6. Post handshake: `POST /api/aci/handshake`
-   ```json
-   {
-     "payload": { "device_id": "...", "nonce": "...", "ts": ... },
-     "signature_b64": "<base64url_signature>"
-   }
-   ```
+### Required Endpoint
 
-### Security Notes
-
-- **Nonce TTL**: Nonces expire after 30 seconds
-- **Device binding**: Nonce is bound to the device_id that requested it
-- **Signature required**: All trusted devices must have a registered public key
-- **Canonical JSON**: Payload must be serialized with sorted keys, no whitespace
-
-### Testing Without Signatures
-
-For development/testing, set environment variable:
-```bash
-SKIP_SIGNATURE_VERIFY=true
+```
+GET /api/duty?nonce=<nonce>&aci_id=<aci_id>
 ```
 
-**Warning**: Never use this in production - it bypasses authentication!
+Response (DutyAssertion):
+```json
+{
+  "aci_id": "aci-pi4-001",
+  "nonce": "<echoed_nonce>",
+  "issued_at": "2026-02-01T00:00:00.000Z",
+  "ttl_seconds": 30,
+  "device_id": "ios-device-hash",
+  "user": { "id": "crew123", "role": "pilot" },
+  "duty_state": "ON_DUTY",
+  "signature": "<base64_hmac_signature>"
+}
+```
 
-On successful handshake, ACI transitions to FLIGHT_MODE and unlocks flight apps.
+### HMAC Signature
+
+Both ACI and FlyGate must use the same shared secret (`FLYGATE_ACI_SHARED_SECRET`).
+
+**Canonical string** (pipe-delimited, exact order):
+```
+aci_id|nonce|issued_at|ttl_seconds|device_id|user.id|user.role|duty_state
+```
+
+**Signature**: `base64(HMAC-SHA256(shared_secret, canonical_string))`
+
+### Lock/Unlock Rules
+
+**ACI is LOCKED if:**
+- Cannot reach FlyGate
+- Signature invalid
+- TTL expired
+- `duty_state` is not `ON_DUTY`
+
+**ACI is UNLOCKED if:**
+- Valid duty assertion received
+- Signature matches
+- Within TTL
+- `duty_state` is `ON_DUTY`
+
+### Generate Shared Secret
+
+```bash
+openssl rand -base64 32
+```
+
+Use the same secret on both the Pi (`FLYGATE_ACI_SHARED_SECRET` env var) and the FlyGate Duty service.

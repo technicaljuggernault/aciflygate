@@ -19,8 +19,6 @@ import {
 import {
   fetchStatus,
   fetchCapabilities,
-  simulateAttach,
-  simulateDetach,
   type ACIStatus,
   type AppCapability,
 } from "@/lib/aci-api";
@@ -41,8 +39,6 @@ type ACIContextValue = {
   apps: AppCapability[];
   loading: boolean;
   error: string | null;
-  dockDevice: (deviceId: string) => Promise<void>;
-  undockDevice: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -78,33 +74,9 @@ function ACIProvider({ children }: { children: React.ReactNode }) {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
 
-  const dockDevice = React.useCallback(async (deviceId: string) => {
-    setLoading(true);
-    try {
-      await simulateAttach(deviceId);
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to dock");
-    } finally {
-      setLoading(false);
-    }
-  }, [refresh]);
-
-  const undockDevice = React.useCallback(async () => {
-    setLoading(true);
-    try {
-      await simulateDetach();
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to undock");
-    } finally {
-      setLoading(false);
-    }
-  }, [refresh]);
-
   const value = React.useMemo<ACIContextValue>(
-    () => ({ status, apps, loading, error, dockDevice, undockDevice, refresh }),
-    [status, apps, loading, error, dockDevice, undockDevice, refresh],
+    () => ({ status, apps, loading, error, refresh }),
+    [status, apps, loading, error, refresh],
   );
 
   return <ACIContext.Provider value={value}>{children}</ACIContext.Provider>;
@@ -154,16 +126,9 @@ function SettingsTileButton({ onClick }: { onClick: () => void }) {
 }
 
 function LauncherScreen({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { status, apps, loading, dockDevice, undockDevice } = useACI();
+  const { status, apps, loading } = useACI();
+  const { state } = useGatekeeperState();
   const isFlightMode = status?.dutyState === "FLIGHT_MODE";
-
-  const handleDockToggle = async () => {
-    if (isFlightMode) {
-      await undockDevice();
-    } else {
-      await dockDevice("FlyGateAgent-iPad-0001");
-    }
-  };
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden flygate-surface">
@@ -179,21 +144,14 @@ function LauncherScreen({ onOpenSettings }: { onOpenSettings: () => void }) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleDockToggle}
-            disabled={loading}
-            className={
-              "flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-medium transition-colors " +
-              (isFlightMode
-                ? "border-[rgba(56,189,248,0.30)] bg-[rgba(56,189,248,0.12)] text-white hover:bg-[rgba(56,189,248,0.18)]"
-                : "border-white/15 bg-white/8 text-white/70 hover:bg-white/12")
-            }
-            data-testid="button-dock-toggle"
-          >
-            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
-            {isFlightMode ? "Undock iPad" : "Dock iPad"}
-          </button>
+          <div className="flex items-center gap-2 text-xs text-white/60">
+            {state?.flygate.reachable ? (
+              <Wifi className="h-3 w-3 text-green-400" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-red-400" />
+            )}
+            FlyGate
+          </div>
           <div
             className={
               "rounded-full border px-3 py-1 text-xs " +
@@ -287,7 +245,8 @@ function SettingsScreen({ onBack }: { onBack: () => void }) {
 }
 
 function InflightScreen() {
-  const { status, apps, undockDevice, loading } = useACI();
+  const { status, apps } = useACI();
+  const { state } = useGatekeeperState();
   const [activeApp, setActiveApp] = React.useState<string | null>(null);
 
   const sideApps = apps.filter((a) => a.appId !== "com.flight.maps").slice(0, 2);
@@ -302,25 +261,23 @@ function InflightScreen() {
             style={{ fontFamily: "Oxanium, var(--font-sans)" }}
             data-testid="text-inflight-title"
           >
-            Inflight Mode
+            Flight Mode
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={undockDevice}
-            disabled={loading}
-            className="flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/12"
-            data-testid="button-exit-inflight"
-          >
-            {loading && <Loader2 className="h-3 w-3 animate-spin" />}
-            Exit Inflight
-          </button>
+          <div className="flex items-center gap-2 text-xs text-white/60">
+            {state?.flygate.reachable ? (
+              <Wifi className="h-3 w-3 text-green-400" />
+            ) : (
+              <WifiOff className="h-3 w-3 text-red-400" />
+            )}
+            FlyGate
+          </div>
           <div
             className="rounded-full border border-[rgba(56,189,248,0.25)] bg-[rgba(56,189,248,0.10)] px-3 py-1 text-xs text-white/90"
             data-testid="status-inflight"
           >
-            {status?.trustedDeviceName || "iPad Connected"}
+            {status?.trustedDeviceName || "On Duty"}
           </div>
         </div>
       </header>
